@@ -14,12 +14,13 @@ import (
     "go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/bson"
 
-	// "github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go"
 	// jwtware "github.com/gofiber/jwt/v3"
 )
 
 var userCollection *mongo.Collection = configs.GetCollection(configs.DB, "users")
 var validate = validator.New()
+const jwtSecret = "asecret"
 
 func Register(c *fiber.Ctx) error {
     ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -76,6 +77,19 @@ func Login(c *fiber.Ctx) error {
     if req.Password != user.Password {
         return c.Status(http.StatusBadRequest).JSON(responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data": "password wrong"}})
     }
-    
-    return c.Status(http.StatusCreated).JSON(responses.Response{Status: http.StatusCreated, Message: "success", Data: &fiber.Map{"data": req}})
+
+    token := jwt.New(jwt.SigningMethodHS256)
+    claims := token.Claims.(jwt.MapClaims)
+    claims["sub"] = user.Id
+    claims["exp"] = time.Now().Add(time.Hour * 24 * 7)
+
+    t, err := token.SignedString([]byte(jwtSecret))
+    if err != nil {
+        return c.Status(http.StatusInternalServerError).JSON(responses.Response{Status: http.StatusInternalServerError, Message: "error", Data: &fiber.Map{"data":err.Error()}})
+    }
+   
+    return c.Status(http.StatusCreated).JSON(responses.Response{Status: http.StatusOK, Message: "success", Data: &fiber.Map{
+        "token": t,
+        "email": req.Email,
+    }})
 }
